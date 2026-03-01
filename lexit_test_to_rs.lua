@@ -62,7 +62,7 @@ end
 
 -- Generate the #[case(...)] line for a single test
 local function generate_case_line(test_case)
-	local input_str = string.format('"%s"', escape_rust_string(test_case.input))
+	local input_str = string.format('r#"%s"#', test_case.input)
 
 	-- Build expected vector
 	local expected_parts = {}
@@ -72,7 +72,7 @@ local function generate_case_line(test_case)
 		local category = test_case.expected[2 * i]
 		local rust_cat = category_to_rust(category)
 
-		table.insert(expected_parts, string.format('(%s, "%s".to_string())', rust_cat, escape_rust_string(lexeme_str)))
+		table.insert(expected_parts, string.format('(%s, r#"%s"#.to_string())', rust_cat, lexeme_str))
 		i = i + 1
 	end
 
