@@ -220,9 +220,9 @@ def lua_table_to_rust(table: list) -> str:
 def lua_table_to_rust_value(v: object) -> str:
     """Convert a top-level parsed Lua value to a Rust Option<Node> expression."""
     if v is None:
-        return "None"
+        return "Node::none()"
     if isinstance(v, list):
-        return f"Some({lua_table_to_rust(v)})"
+        return f"{lua_table_to_rust(v)}"
     return "None"
 
 
@@ -395,7 +395,7 @@ def generate(calls: list[dict]) -> str:
         lines.append("        #[case] input: &str,")
         lines.append("        #[case] exp_good: bool,")
         lines.append("        #[case] exp_done: bool,")
-        lines.append("        #[case] exp_ast: Option<Node>,")
+        lines.append("        #[case] exp_ast: Node,")
         lines.append("    ) {")
         lines.append("        let tokens = Lexer::new(input.to_string()).lex_input();")
         lines.append("        let (good, done, ast) = Parser::new(tokens).parse();")
