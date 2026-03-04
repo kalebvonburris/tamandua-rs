@@ -41,7 +41,7 @@ pub enum NodeKind {
     /// Root node of a program or function body.
     Program,
     /// A statement, identified by a string tag (e.g. `"assn"`, `"while"`).
-    Stmt(Box<str>),
+    Stmt(ParseToken),
     /// An expression or operator node, tagged by the operator (e.g. `"+"`).
     Expr(Box<str>),
     /// A leaf: an identifier, literal, or raw lexeme string.
@@ -66,9 +66,9 @@ impl Node {
     }
 
     /// Constructs a `Stmt` node with the given tag and children.
-    pub fn stmt(tag: &str, children: Vec<Node>) -> Self {
+    pub fn stmt(tag: ParseToken, children: Vec<Node>) -> Self {
         Self {
-            kind: NodeKind::Stmt(tag.into()),
+            kind: NodeKind::Stmt(tag),
             children,
         }
     }
@@ -107,6 +107,37 @@ impl Parser {
             tokens,
             lexstr: String::new(),
             lexcat: Lexeme::None,
+        }
+    }
+
+    /// Consumes the next token, updating the current lexeme category and string.
+    fn advance(&mut self) {
+        if let Some((cat, s)) = self.tokens.pop() {
+            self.lexcat = cat;
+            self.lexstr = s;
+        } else {
+            self.lexcat = Lexeme::None;
+            self.lexstr.clear();
+        }
+    }
+
+    /// Checks if the next token matches the expected string, consuming it if so.
+    pub fn match_str(&mut self, expected: &str) -> bool {
+        if self.lexstr == expected {
+            self.advance();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Checks if the next token matches the expected lexeme category, consuming it if so.
+    pub fn match_cat(&mut self, expected: Lexeme) -> bool {
+        if self.lexcat == expected {
+            self.advance();
+            true
+        } else {
+            false
         }
     }
 
@@ -149,6 +180,35 @@ impl Parser {
         let mut good = true;
         let mut ast = Node::none();
 
+        if self.match_str(";") {
+            return (true, Node::stmt(ParseToken::Empty, vec![]));
+        }
+
         (good, ast)
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParseToken {
+    Empty,
+    Print,
+    Println,
+    StrlitOut,
+    Return,
+    Inc,
+    Dec,
+    FuncDef,
+    FuncCall,
+    If,
+    While,
+    Identifier,
+    ChrCall,
+    RndCall,
+    ReadCall,
+    Assn,
+    BinOp,
+    UnOp,
+    NumLit,
+    SimpleVar,
+    ArrayVar,
 }

@@ -20,27 +20,27 @@ from pathlib import Path
 # Maps the Lua symbolic constant names (as they appear in the test file with
 # their 'x' suffix) to the string tags used by our Rust Node constructors.
 CONST_MAP: dict[str, str] = {
-    "PROGRAMx":     "PROGRAM",   # handled structurally, not as a tag
-    "EMPTYxSTMT":   "empty",
-    "PRINTxSTMT":   "print",
-    "PRINTLNxSTMT": "println",
-    "RETURNxSTMT":  "return",
-    "INCxSTMT":     "inc",
-    "DECxSTMT":     "dec",
-    "ASSNxSTMT":    "assn",
-    "FUNCxCALL":    "func_call",
-    "FUNCxDEF":     "func_def",
-    "IFxSTMT":      "if",
-    "WHILExLOOP":   "while",
-    "STRLITxOUT":   "strlit_out",
-    "CHRxCALL":     "chr_call",
-    "BINxOP":       "BIN_OP",    # handled specially (expr node)
-    "UNxOP":        "UN_OP",     # handled specially (expr node)
-    "NUMLITxVAL":   "NUMLIT",    # leaf value
-    "READxCALL":    "readint",
-    "RNDxCALL":     "rnd",
-    "SIMPLExVAR":   "SIMPLE_VAR", # leaf value
-    "ARRAYxVAR":    "array_var",
+    "PROGRAMx":     "Program",   # handled structurally, not as a tag
+    "EMPTYxSTMT":   "Empty",
+    "PRINTxSTMT":   "Print",
+    "PRINTLNxSTMT": "Println",
+    "RETURNxSTMT":  "Return",
+    "INCxSTMT":     "Inc",
+    "DECxSTMT":     "Dec",
+    "ASSNxSTMT":    "Assn",
+    "FUNCxCALL":    "FuncCall",
+    "FUNCxDEF":     "FuncDef",
+    "IFxSTMT":      "If",
+    "WHILExLOOP":   "While",
+    "STRLITxOUT":   "StrlitOut",
+    "CHRxCALL":     "ChrCall",
+    "BINxOP":       "BinOp",    # handled specially (expr node)
+    "UNxOP":        "UnOp",     # handled specially (expr node)
+    "NUMLITxVAL":   "NumLit",    # leaf value
+    "READxCALL":    "ReadCall",
+    "RNDxCALL":     "RndCall",
+    "SIMPLExVAR":   "SimpleVar", # leaf value
+    "ARRAYxVAR":    "ArrayVar",
 }
 
 # ─── Lua source tokeniser ────────────────────────────────────────────────────
@@ -214,7 +214,7 @@ def lua_table_to_rust(table: list) -> str:
     tag = CONST_MAP.get(head, head.lower().replace("x", "_", 1))
     children = [lua_table_to_rust(c) for c in table[1:]]
     children_str = ", ".join(children)
-    return f'Node::stmt("{tag}", vec![{children_str}])'
+    return f'Node::stmt(ParseToken::{tag}, vec![{children_str}])'
 
 
 def lua_table_to_rust_value(v: object) -> str:
@@ -371,7 +371,7 @@ def generate(calls: list[dict]) -> str:
         "",
         "use rstest::rstest;",
         "use std::time::Duration;",
-        "use tamandua_rs::parser::{Node, Parser};",
+        "use tamandua_rs::parser::{Node, Parser, ParseToken};",
         "use tamandua_rs::lexer::Lexer;",
         "",
     ]
