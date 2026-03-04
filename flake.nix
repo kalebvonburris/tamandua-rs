@@ -70,6 +70,7 @@
             libxkbcommon
             stdenv.cc.cc.lib
             openssl
+            cargo-nextest
         ];
 
         LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath buildInputs;
