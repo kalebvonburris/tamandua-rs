@@ -20,30 +20,31 @@ from pathlib import Path
 # Maps the Lua symbolic constant names (as they appear in the test file with
 # their 'x' suffix) to the string tags used by our Rust Node constructors.
 CONST_MAP: dict[str, str] = {
-    "PROGRAMx":     "Program",   # handled structurally, not as a tag
-    "EMPTYxSTMT":   "Empty",
-    "PRINTxSTMT":   "Print",
+    "PROGRAMx": "Program",  # handled structurally, not as a tag
+    "EMPTYxSTMT": "Empty",
+    "PRINTxSTMT": "Print",
     "PRINTLNxSTMT": "Println",
-    "RETURNxSTMT":  "Return",
-    "INCxSTMT":     "Inc",
-    "DECxSTMT":     "Dec",
-    "ASSNxSTMT":    "Assn",
-    "FUNCxCALL":    "FuncCall",
-    "FUNCxDEF":     "FuncDef",
-    "IFxSTMT":      "If",
-    "WHILExLOOP":   "While",
-    "STRLITxOUT":   "StrlitOut",
-    "CHRxCALL":     "ChrCall",
-    "BINxOP":       "BinOp",    # handled specially (expr node)
-    "UNxOP":        "UnOp",     # handled specially (expr node)
-    "NUMLITxVAL":   "NumLit",    # leaf value
-    "READxCALL":    "ReadCall",
-    "RNDxCALL":     "RndCall",
-    "SIMPLExVAR":   "SimpleVar", # leaf value
-    "ARRAYxVAR":    "ArrayVar",
+    "RETURNxSTMT": "Return",
+    "INCxSTMT": "Inc",
+    "DECxSTMT": "Dec",
+    "ASSNxSTMT": "Assn",
+    "FUNCxCALL": "FuncCall",
+    "FUNCxDEF": "FuncDef",
+    "IFxSTMT": "If",
+    "WHILExLOOP": "While",
+    "STRLITxOUT": "StrlitOut",
+    "CHRxCALL": "ChrCall",
+    "BINxOP": "BinOp",  # handled specially (expr node)
+    "UNxOP": "UnOp",  # handled specially (expr node)
+    "NUMLITxVAL": "NumLit",  # leaf value
+    "READxCALL": "ReadCall",
+    "RNDxCALL": "RndCall",
+    "SIMPLExVAR": "SimpleVar",  # leaf value
+    "ARRAYxVAR": "ArrayVar",
 }
 
 # ─── Lua source tokeniser ────────────────────────────────────────────────────
+
 
 def parse_lua_string(text: str, pos: int) -> tuple[str, int]:
     """Parse a Lua single- or double-quoted string literal starting at pos.
@@ -57,10 +58,17 @@ def parse_lua_string(text: str, pos: int) -> tuple[str, int]:
             esc = text[i + 1]
             i += 2
             # Interpret common Lua escape sequences
-            result.append({
-                "n": "\n", "r": "\r", "t": "\t",
-                "\\": "\\", '"': '"', "'": "'", "a": "\a",
-            }.get(esc, "\\" + esc))
+            result.append(
+                {
+                    "n": "\n",
+                    "r": "\r",
+                    "t": "\t",
+                    "\\": "\\",
+                    '"': '"',
+                    "'": "'",
+                    "a": "\a",
+                }.get(esc, "\\" + esc)
+            )
             continue
         if ch == quote:
             i += 1
@@ -77,6 +85,7 @@ def skip_ws(text: str, i: int) -> int:
 
 
 # ─── Lua table (AST) parser ──────────────────────────────────────────────────
+
 
 def parse_lua_value(text: str, i: int) -> tuple[object, int]:
     """Parse a Lua value (string, identifier/constant, or table) at position i.
@@ -145,6 +154,7 @@ def parse_lua_table(text: str, i: int) -> tuple[list, int]:
 
 # ─── Lua table → Rust Node expression ───────────────────────────────────────
 
+
 def lua_table_to_rust(table: list) -> str:
     """Recursively convert a parsed Lua AST table into a Rust Node expression."""
     if not table:
@@ -159,62 +169,57 @@ def lua_table_to_rust(table: list) -> str:
 
     # ── Leaves that carry a single string value ───────────────────────────
     if head in ("NUMLITxVAL", "SIMPLExVAR"):
+        token_type = "numlit" if head == "NUMLITxVAL" else "strlit"
         val = table[1] if len(table) > 1 else ""
-        return f'Node::value({rust_str(val)})'
+        return f"Node::value(ValueToken::{token_type}({rust_str(val)}))"
 
     # ── READ_CALL (no children) ───────────────────────────────────────────
     if head == "READxCALL":
-        return 'Node::stmt("readint", vec![])'
+        return "Node::stmt(StmtToken::ReadCall, vec![])"
 
     # ── BIN_OP: {{BINxOP, op}, lhs, rhs} ─────────────────────────────────
     # In Lua the BIN_OP head is itself a sub-table: { BINxOP, "+" }
     if isinstance(head, list) and head and head[0] == "BINxOP":
         op = head[1] if len(head) > 1 else "?"
-        lhs = lua_table_to_rust(table[1]) if len(table) > 1 else "Node::value(\"\")"
-        rhs = lua_table_to_rust(table[2]) if len(table) > 2 else "Node::value(\"\")"
-        return f'Node::expr({rust_str(op)}, vec![{lhs}, {rhs}])'
+        lhs = lua_table_to_rust(table[1]) if len(table) > 1 else 'Node::value("")'
+        rhs = lua_table_to_rust(table[2]) if len(table) > 2 else 'Node::value("")'
+        return f"Node::expr(ExprToken::bin_op({rust_str(op)}), vec![{lhs}, {rhs}])"
 
     # ── UN_OP: {{UNxOP, op}, operand} ────────────────────────────────────
     if isinstance(head, list) and head and head[0] == "UNxOP":
         op = head[1] if len(head) > 1 else "?"
-        operand = lua_table_to_rust(table[1]) if len(table) > 1 else "Node::value(\"\")"
-        # Matches parser.rs: expr(op, [value("unary"), operand])
-        return f'Node::expr({rust_str(op)}, vec![Node::value("unary"), {operand}])'
-
-    # ── BINxOP / UNxOP used as a direct string constant (shouldn't happen) ─
-    if head in ("BINxOP", "UNxOP"):
-        op = table[1] if len(table) > 1 else "?"
-        children = [lua_table_to_rust(c) for c in table[2:]]
-        children_str = ", ".join(children)
-        return f'Node::expr({rust_str(op)}, vec![{children_str}])'
+        operand = lua_table_to_rust(table[1]) if len(table) > 1 else 'Node::value("")'
+        return f"Node::expr(ExprToken::un_op({rust_str(op)}), vec![{operand}])"
 
     # ── ARRAYxVAR: {ARRAYxVAR, name, index_expr} ─────────────────────────
     if head == "ARRAYxVAR":
         name = table[1] if len(table) > 1 else ""
-        idx  = lua_table_to_rust(table[2]) if len(table) > 2 else 'Node::value("")'
-        return f'Node::expr("array_var", vec![Node::value({rust_str(name)}), {idx}])'
+        idx = lua_table_to_rust(table[2]) if len(table) > 2 else 'Node::value("")'
+        return f"Node::expr(ExprToken::ArrayVar, vec![Node::strlit({rust_str(name)}), {idx}])"
 
     # ── FUNCxCALL: {FUNCxCALL, name} ─────────────────────────────────────
     if head == "FUNCxCALL":
         name = table[1] if len(table) > 1 else ""
-        return f'Node::stmt("func_call", vec![Node::value({rust_str(name)})])'
+        return f"Node::stmt(StmtToken::FuncCall, vec![Node::strlit({rust_str(name)})])"
 
     # ── FUNCxDEF: {FUNCxDEF, name, program} ──────────────────────────────
     if head == "FUNCxDEF":
         name = rust_str(table[1]) if len(table) > 1 else '""'
-        body = lua_table_to_rust(table[2]) if len(table) > 2 else "Node::program(vec![])"
-        return f'Node::stmt("func_def", vec![Node::value({name}), {body}])'
+        body = (
+            lua_table_to_rust(table[2]) if len(table) > 2 else "Node::program(vec![])"
+        )
+        return f"Node::stmt(StmtToken::FuncDef, vec![Node::strlit({name}), {body}])"
 
     # ── STRLITxOUT: {STRLITxOUT, raw_string} ────────────────────────────
     if head == "STRLITxOUT":
         val = table[1] if len(table) > 1 else ""
-        return f'Node::stmt("strlit_out", vec![Node::value({rust_str(val)})])'
+        return f"Node::stmt(StmtToken::StrlitOut, vec![Node::strlit({rust_str(val)})])"
 
     # ── Generic stmt nodes with variadic children ─────────────────────────
-    tag = CONST_MAP.get(head, head.lower().replace("x", "_", 1))
+    tag = CONST_MAP.get(head, head)
     children = [lua_table_to_rust(c) for c in table[1:]]
     children_str = ", ".join(children)
-    return f'Node::stmt(ParseToken::{tag}, vec![{children_str}])'
+    return f"Node::stmt(StmtToken::{tag}, vec![{children_str}])"
 
 
 def lua_table_to_rust_value(v: object) -> str:
@@ -251,6 +256,7 @@ def to_rust_input(s: str) -> str:
 
 # ─── checkParse extractor ────────────────────────────────────────────────────
 
+
 def extract_check_parse_calls(source: str) -> list[dict]:
     """Extract all checkParse(...) calls from Lua source.
 
@@ -262,8 +268,8 @@ def extract_check_parse_calls(source: str) -> list[dict]:
 
     # Strip Lua comments (-- to end of line), but not inside strings
     # We'll do a simple approach: parse call-by-call
-    suite_re = re.compile(r'function (test_\w+)\s*\(')
-    call_start_re = re.compile(r'\bcheckParse\s*\(')
+    suite_re = re.compile(r"function (test_\w+)\s*\(")
+    call_start_re = re.compile(r"\bcheckParse\s*\(")
 
     i = 0
     while i < len(source):
@@ -275,7 +281,7 @@ def extract_check_parse_calls(source: str) -> list[dict]:
             continue
 
         # Skip Lua line comments
-        if source[i:i+2] == "--":
+        if source[i : i + 2] == "--":
             end = source.find("\n", i)
             i = end + 1 if end != -1 else len(source)
             continue
@@ -342,22 +348,28 @@ def extract_check_parse_calls(source: str) -> list[dict]:
             if i < len(source) and source[i] == ")":
                 i += 1
 
-            results.append({
-                "suite": current_suite,
-                "prog": prog,
-                "good": bool(good_val),
-                "done": bool(done_val),
-                "ast": ast_val,
-                "name": name,
-            })
+            results.append(
+                {
+                    "suite": current_suite,
+                    "prog": prog,
+                    "good": bool(good_val),
+                    "done": bool(done_val),
+                    "ast": ast_val,
+                    "name": name,
+                }
+            )
         except Exception as e:
-            print(f"Warning: failed to parse checkParse at offset {i}: {e}", file=sys.stderr)
+            print(
+                f"Warning: failed to parse checkParse at offset {i}: {e}",
+                file=sys.stderr,
+            )
             continue
 
     return results
 
 
 # ─── Code generation ─────────────────────────────────────────────────────────
+
 
 def fn_name(suite: str) -> str:
     """Convert a Lua test suite function name to a Rust test function name."""
@@ -371,7 +383,7 @@ def generate(calls: list[dict]) -> str:
         "",
         "use rstest::rstest;",
         "use std::time::Duration;",
-        "use tamandua_rs::parser::{Node, Parser, ParseToken};",
+        "use tamandua_rs::parser::*;",
         "use tamandua_rs::lexer::Lexer;",
         "",
     ]
@@ -384,10 +396,10 @@ def generate(calls: list[dict]) -> str:
     for suite, suite_calls in suites.items():
         lines.append("    #[rstest]")
         for c in suite_calls:
-            prog  = to_rust_input(c["prog"])
-            good  = "true" if c["good"] else "false"
-            done  = "true" if c["done"] else "false"
-            ast   = lua_table_to_rust_value(c["ast"])
+            prog = to_rust_input(c["prog"])
+            good = "true" if c["good"] else "false"
+            done = "true" if c["done"] else "false"
+            ast = lua_table_to_rust_value(c["ast"])
             lines.append(f"    #[case({prog}, {good}, {done}, {ast})]")
 
         lines.append("    #[timeout(Duration::from_secs(1))]")
@@ -399,10 +411,16 @@ def generate(calls: list[dict]) -> str:
         lines.append("    ) {")
         lines.append("        let tokens = Lexer::new(input.to_string()).lex_input();")
         lines.append("        let (good, done, ast) = Parser::new(tokens).parse();")
-        lines.append("        assert_eq!(good, exp_good, \"good flag mismatch\\ninput: {input:?}\");")
-        lines.append("        assert_eq!(done, exp_done, \"done flag mismatch\\ninput: {input:?}\");")
+        lines.append(
+            '        assert_eq!(good, exp_good, "good flag mismatch\\ninput: {input:?}");'
+        )
+        lines.append(
+            '        assert_eq!(done, exp_done, "done flag mismatch\\ninput: {input:?}");'
+        )
         lines.append("        if exp_good && exp_done {")
-        lines.append("            assert_eq!(ast, exp_ast, \"ast mismatch\\ninput: {input:?}\");")
+        lines.append(
+            '            assert_eq!(ast, exp_ast, "ast mismatch\\ninput: {input:?}");'
+        )
         lines.append("        }")
         lines.append("    }")
         lines.append("")
@@ -412,12 +430,16 @@ def generate(calls: list[dict]) -> str:
 
 # ─── Main ────────────────────────────────────────────────────────────────────
 
+
 def main() -> None:
     lua_path = Path("parseit_test.lua")
     source = lua_path.read_text()
 
     calls = extract_check_parse_calls(source)
-    print(f"Extracted {len(calls)} checkParse calls across {len({c['suite'] for c in calls})} suites", file=sys.stderr)
+    print(
+        f"Extracted {len(calls)} checkParse calls across {len({c['suite'] for c in calls})} suites",
+        file=sys.stderr,
+    )
 
     rust = generate(calls)
 

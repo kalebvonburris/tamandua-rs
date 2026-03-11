@@ -41,11 +41,11 @@ pub enum NodeKind {
     /// Root node of a program or function body.
     Program,
     /// A statement, identified by a string tag (e.g. `"assn"`, `"while"`).
-    Stmt(ParseToken),
+    Stmt(StmtToken),
     /// An expression or operator node, tagged by the operator (e.g. `"+"`).
-    Expr(Box<str>),
+    Expr(ExprToken),
     /// A leaf: an identifier, literal, or raw lexeme string.
-    Value(Box<str>),
+    Value(ValueToken),
 }
 
 impl Node {
@@ -66,7 +66,7 @@ impl Node {
     }
 
     /// Constructs a `Stmt` node with the given tag and children.
-    pub fn stmt(tag: ParseToken, children: Vec<Node>) -> Self {
+    pub fn stmt(tag: StmtToken, children: Vec<Node>) -> Self {
         Self {
             kind: NodeKind::Stmt(tag),
             children,
@@ -74,17 +74,41 @@ impl Node {
     }
 
     /// Constructs an `Expr` node with the given operator tag and children.
-    pub fn expr(op: &str, children: Vec<Node>) -> Self {
+    pub fn expr(op: ExprToken, children: Vec<Node>) -> Self {
         Self {
-            kind: NodeKind::Expr(op.into()),
+            kind: NodeKind::Expr(op),
             children,
         }
     }
 
-    /// Constructs a leaf `Value` node with no children.
-    pub fn value(s: &str) -> Self {
+    /// Constructs a `Value` node from a raw lexeme string.
+    pub fn value(v: ValueToken) -> Self {
         Self {
-            kind: NodeKind::Value(s.into()),
+            kind: NodeKind::Value(v),
+            children: vec![],
+        }
+    }
+
+    /// Constructs a `Value` node from a string literal.
+    pub fn strlit(s: &str) -> Self {
+        Self {
+            kind: NodeKind::Value(ValueToken::strlit(s)),
+            children: vec![],
+        }
+    }
+
+    /// Constructs a `Value` node from a numeric literal string.
+    pub fn numlit(s: &str) -> Self {
+        Self {
+            kind: NodeKind::Value(ValueToken::numlit(s)),
+            children: vec![],
+        }
+    }
+
+    /// Constructs a `Value` node from an identifier string.
+    pub fn identifier(s: &str) -> Self {
+        Self {
+            kind: NodeKind::Value(ValueToken::identifier(s)),
             children: vec![],
         }
     }
@@ -181,7 +205,7 @@ impl Parser {
         let mut ast = Node::none();
 
         if self.match_str(";") {
-            return (true, Node::stmt(ParseToken::Empty, vec![]));
+            return (true, Node::stmt(StmtToken::Empty, vec![]));
         }
 
         (good, ast)
@@ -189,8 +213,12 @@ impl Parser {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ParseToken {
+pub enum StmtToken {
     Empty,
+    FuncCall,
+    ChrCall,
+    RndCall,
+    ReadCall,
     Print,
     Println,
     StrlitOut,
@@ -198,17 +226,55 @@ pub enum ParseToken {
     Inc,
     Dec,
     FuncDef,
-    FuncCall,
     If,
     While,
-    Identifier,
-    ChrCall,
-    RndCall,
-    ReadCall,
     Assn,
-    BinOp,
-    UnOp,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExprToken {
+    Identifier,
+    BinOp(String),
+    UnOp(String),
     NumLit,
     SimpleVar,
     ArrayVar,
+}
+
+impl ExprToken {
+    pub fn bin_op(s: &str) -> Self {
+        Self::BinOp(s.to_string())
+    }
+
+    pub fn un_op(s: &str) -> Self {
+        Self::UnOp(s.to_string())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParseToken {
+    Empty,
+    Identifier,
+    ReadCall,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ValueToken {
+    Identifier(String),
+    NumLit(String),
+    StrLit(String),
+}
+
+impl ValueToken {
+    pub fn identifier(s: &str) -> Self {
+        Self::Identifier(s.to_string())
+    }
+
+    pub fn numlit(s: &str) -> Self {
+        Self::NumLit(s.to_string())
+    }
+
+    pub fn strlit(s: &str) -> Self {
+        Self::StrLit(s.to_string())
+    }
 }
